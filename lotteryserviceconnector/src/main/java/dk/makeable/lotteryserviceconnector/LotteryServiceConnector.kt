@@ -18,20 +18,14 @@ import dk.makeable.lotteryserviceconnector.LotteryServiceConnector.Companion.REQ
 class LotteryServiceConnector(private val activity: AppCompatActivity) {
 
     companion object {
-        const val REQUEST_REGISTER_CLIENT = 0
-        const val REQUEST_UNREGISTER_CLIENT = 1
-        const val REQUEST_GET_SOTI_HARDWARE_ID = 2
-        const val REQUEST_CHANGE_SUPPORT_SCREEN_MODE = 3
+        const val REQUEST_GET_SOTI_HARDWARE_ID = 0
+        const val REQUEST_CHANGE_SUPPORT_SCREEN_MODE = 1
 
         const val EXTRA_SOTI_HARDWARE_ID = "SOTI_HARDWARE_ID"
         const val EXTRA_SUPPORT_SCREEN_MODE = "SUPPORT_SCREEN_MODE"
     }
 
-    enum class SupportScreenMode {
-        Varelotteriet,
-        Landbrugslotteriet
-    }
-
+    private var serviceConnectedCallback: ServiceConnectedCallback? = null
     private var sotiHardwareIdCallback: SOTIHardwareIdCallback? = null
     private val internalSOTIHardwareIdCallback = SOTIHardwareIdCallback {
         sotiHardwareIdCallback?.onSOTIHardwareIdReceived(it)
@@ -41,74 +35,94 @@ class LotteryServiceConnector(private val activity: AppCompatActivity) {
     private val connection = LotteryServiceConnection()
 
     private var bound = false
-    private var boundService: Messenger? = null
+    private var connectedService: Messenger? = null
 
-    fun bindService() {
-        check(!bound) { "Service already bound" }
+    @Throws(ServiceAlreadyBound::class, FailedToBindService::class)
+    fun bindService(callback: ServiceConnectedCallback) {
+        if (bound)
+            throw ServiceAlreadyBound()
 
-        activity.bindService(
-            Intent().apply {
-                component = ComponentName(
-                    "dk.makeable.varelotteriet",
-                    "dk.makeable.varelotteriet.service.LotteryService"
-                )
-            },
-            connection,
-            Context.BIND_AUTO_CREATE
-        )
-
-        bound = true
-    }
-
-    fun unbindService() {
-        check(bound) { "Service not bound" }
-
-        if (boundService != null) {
-            try {
-                val message = Message.obtain(null, REQUEST_UNREGISTER_CLIENT)
-                message.replyTo = messenger
-                boundService!!.send(message)
-            } catch (e: Exception) {
-                Log.e("LotteryServiceConnector", "Failed to unregister client", e)
-            }
+        try {
+            serviceConnectedCallback = callback
+            activity.bindService(
+                Intent().apply {
+                    component = ComponentName(
+                        "dk.makeable.varelotteriet",
+                        "dk.makeable.varelotteriet.service.LotteryService"
+                    )
+                },
+                connection,
+                Context.BIND_AUTO_CREATE
+            )
+            bound = true
+        } catch (e: Exception) {
+            throw FailedToBindService(e)
         }
-
-        sotiHardwareIdCallback = null
-        activity.unbindService(connection)
-        bound = false
     }
 
-    fun changeSupportScreenMode(mode: SupportScreenMode) {
-        check(boundService != null) { "Service not bound" }
+    @Throws(ServiceNotBound::class, FailedToUnBindService::class)
+    fun unbindService() {
+        if (!bound)
+            throw ServiceNotBound()
 
-        val message = Message.obtain(null, REQUEST_CHANGE_SUPPORT_SCREEN_MODE)
-        message.data = bundleOf(EXTRA_SUPPORT_SCREEN_MODE to mode.name)
-        boundService!!.send(message)
+        try {
+            sotiHardwareIdCallback = null
+            serviceConnectedCallback = null
+            activity.unbindService(connection)
+        } catch (e: Exception) {
+            throw FailedToUnBindService(e)
+        } finally {
+            bound = false
+        }
     }
 
+    private fun changeSupportScreenMode(mode: String) {
+        if (connectedService == null)
+            throw ServiceNotConnected()
+
+        try {
+            val message = Message.obtain(null, REQUEST_CHANGE_SUPPORT_SCREEN_MODE)
+            message.data = bundleOf(EXTRA_SUPPORT_SCREEN_MODE to mode)
+            connectedService!!.send(message)
+        } catch (e: Exception) {
+            throw FailedToSendChangeModeRequestToService(e)
+        }
+    }
+
+    @Throws(ServiceNotConnected::class, FailedToSendChangeModeRequestToService::class)
+    fun showLLOnSupportScreen() {
+        changeSupportScreenMode("LL")
+    }
+
+    @Throws(ServiceNotConnected::class, FailedToSendChangeModeRequestToService::class)
+    fun showVLOnSupportScreen() {
+        changeSupportScreenMode("VL")
+    }
+
+    @Throws(ServiceNotConnected::class, FailedToSendSOTIHardwareIDRequestToService::class)
     fun getSupportScreenSOTIHardwareId(callback: SOTIHardwareIdCallback) {
-        check(boundService != null) { "Service not bound" }
+        if (connectedService == null)
+            throw ServiceNotConnected()
 
-        sotiHardwareIdCallback = callback
-        val message = Message.obtain(null, REQUEST_GET_SOTI_HARDWARE_ID)
-        message.replyTo = messenger
-        boundService!!.send(message)
-    }
-
-    internal fun onSOTIHardwareIdReceived(sotiHardwareId: String) {
-        sotiHardwareIdCallback?.onSOTIHardwareIdReceived(sotiHardwareId)
+        try {
+            sotiHardwareIdCallback = callback
+            val message = Message.obtain(null, REQUEST_GET_SOTI_HARDWARE_ID)
+            message.replyTo = messenger
+            connectedService!!.send(message)
+        } catch (e: Exception) {
+            throw FailedToSendSOTIHardwareIDRequestToService(e)
+        }
     }
 
     private inner class LotteryServiceConnection : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            boundService = Messenger(service)
-            val message = Message.obtain(null, REQUEST_REGISTER_CLIENT)
-            message.replyTo = messenger
-            boundService!!.send(message)
+            connectedService = Messenger(service)
+            serviceConnectedCallback?.onServiceConnected()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            boundService = null
+            connectedService = null
+            serviceConnectedCallback = null
         }
     }
 }
@@ -116,12 +130,13 @@ class LotteryServiceConnector(private val activity: AppCompatActivity) {
 internal class IncomingMessageHandler(private val sotiHardwareIdCallback: SOTIHardwareIdCallback) : Handler(Looper.getMainLooper()) {
 
     override fun handleMessage(msg: Message) {
-        super.handleMessage(msg)
-
         when (msg.what) {
             REQUEST_GET_SOTI_HARDWARE_ID -> {
                 val sotiHardwareId = msg.data.getString(EXTRA_SOTI_HARDWARE_ID)
-                sotiHardwareIdCallback.onSOTIHardwareIdReceived(sotiHardwareId!!)
+                if (sotiHardwareId == null)
+                    Log.e("LotteryServiceConnector", "SOTI hardware id was null when receiving repose from service")
+                else
+                    sotiHardwareIdCallback.onSOTIHardwareIdReceived(sotiHardwareId)
             }
 
             else -> {
@@ -134,4 +149,8 @@ internal class IncomingMessageHandler(private val sotiHardwareIdCallback: SOTIHa
 
 fun interface SOTIHardwareIdCallback {
     fun onSOTIHardwareIdReceived(sotiHardwareId: String)
+}
+
+fun interface ServiceConnectedCallback {
+    fun onServiceConnected()
 }
