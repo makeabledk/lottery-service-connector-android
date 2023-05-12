@@ -2,6 +2,9 @@
 
 ## Implementation
 
+[![](https://jitpack.io/v/makeabledk/lottery-service-connector-android.svg)](https://jitpack.io/#makeabledk/lottery-service-connector-android)
+
+
 ```ruby
 implementation 'com.github.makeabledk:lottery-service-connector-android:latest.version.here'
 ```
@@ -24,3 +27,4 @@ Add package query to manifest:
 ## Usage
 
 Please see sample for implementatoin details [here](https://github.com/makeabledk/lottery-service-connector-android/blob/develop/app/src/main/java/dk/makeable/lotteryserviceconnector/MainActivity.kt).
+
