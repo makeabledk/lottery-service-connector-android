@@ -23,4 +23,4 @@ Add package query to manifest:
 
 ## Usage
 
-Please see sample for implementatoin details: 
+Please see sample for implementatoin details [here](https://github.com/makeabledk/lottery-service-connector-android/blob/develop/app/src/main/java/dk/makeable/lotteryserviceconnector/MainActivity.kt).
