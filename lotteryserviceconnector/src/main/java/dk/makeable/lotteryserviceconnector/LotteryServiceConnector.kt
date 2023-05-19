@@ -47,8 +47,8 @@ class LotteryServiceConnector(private val activity: AppCompatActivity) {
             activity.bindService(
                 Intent().apply {
                     component = ComponentName(
-                        "dk.makeable.varelotteriet",
-                        "dk.makeable.varelotteriet.service.LotteryService"
+                        "dk.makeable.varelotteriet.mainscreenserviceapp",
+                        "dk.makeable.varelotteriet.mainscreenserviceapp.service.LotteryService"
                     )
                 },
                 connection,
