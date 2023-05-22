@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent().apply {
             component = ComponentName(
                 "dk.makeable.varelotteriet",
-                "dk.makeable.varelotteriet.features.main.MainActivity"
+                "dk.makeable.varelotteriet.MainActivity"
             )
         })
     }
