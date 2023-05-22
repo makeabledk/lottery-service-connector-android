@@ -11,13 +11,13 @@ implementation 'com.github.makeabledk:lottery-service-connector-android:latest.v
 
 ## Setup
 
-Add package query to manifest:
+Add package query to manifest of LL main screen app:
 
 ```xml
 <manifest>
 
     <queries>
-        <package android:name="dk.makeable.varelotteriet" />
+        <package android:name="dk.makeable.varelotteriet.mainscreenserviceapp" />
     </queries>
     
     <application
@@ -27,4 +27,3 @@ Add package query to manifest:
 ## Usage
 
 Please see sample for implementatoin details [here](https://github.com/makeabledk/lottery-service-connector-android/blob/develop/app/src/main/java/dk/makeable/lotteryserviceconnector/MainActivity.kt).
-
